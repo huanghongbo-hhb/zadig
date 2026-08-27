@@ -1,6 +1,7 @@
 package jobcontroller
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -282,7 +283,7 @@ spec:
 		t.Fatal("expected helm service to support runtime queries")
 	}
 
-	workloads, err := getAIRuntimeServiceWorkloads(product, service, "generated-orders-release")
+	workloads, err := getAIRuntimeServiceWorkloads(context.Background(), product, service, "generated-orders-release")
 	if err != nil {
 		t.Fatalf("get helm runtime workloads failed: %v", err)
 	}
@@ -305,7 +306,7 @@ func TestGetAIRuntimeServiceWorkloadsReturnsK8SWorkloadsDirectly(t *testing.T) {
 		WorkLoads: want,
 	}
 
-	got, err := getAIRuntimeServiceWorkloads(&commonmodels.Product{}, service, "")
+	got, err := getAIRuntimeServiceWorkloads(context.Background(), &commonmodels.Product{}, service, "")
 	if err != nil {
 		t.Fatalf("get k8s runtime workloads failed: %v", err)
 	}

@@ -1476,9 +1476,6 @@ func buildAIRuntimeServicesSummary(ctx context.Context, projectName string, rele
 		var serviceReleaseNamesErr error
 		if kubeClient != nil && jobType == string(config.JobZadigHelmDeploy) {
 			serviceReleaseNames, serviceReleaseNamesErr = commonutil.GetServiceNameToReleaseNameMap(product)
-			if ctxErr := ctx.Err(); ctxErr != nil {
-				return nil, ctxErr
-			}
 			if serviceReleaseNamesErr != nil {
 				summary.QueryErrors = append(summary.QueryErrors, fmt.Sprintf("resolve env %s helm release names failed: %v", target.EnvName, serviceReleaseNamesErr))
 			}
@@ -1577,14 +1574,12 @@ func getAIReleaseKubeClient(ctx context.Context, clusterID string) (client.Clien
 		kubeClient, err := clientmanager.NewKubeClientManager().GetControllerRuntimeClient(clusterID)
 		ch <- resp{kubeClient: kubeClient, err: err}
 	}()
-	timer := time.NewTimer(aiReleaseSpecialistKubeQueryTimeout)
-	defer timer.Stop()
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	case result := <-ch:
 		return result.kubeClient, result.err
-	case <-timer.C:
+	case <-time.After(aiReleaseSpecialistKubeQueryTimeout):
 		return nil, fmt.Errorf("get kube client timeout after %s", aiReleaseSpecialistKubeQueryTimeout)
 	}
 }
@@ -1688,7 +1683,7 @@ func fillAIRuntimeServicePodReady(ctx context.Context, product *commonmodels.Pro
 	if strings.TrimSpace(product.Namespace) == "" {
 		return fmt.Errorf("query service %s pod status failed: env namespace is empty", item.ServiceName)
 	}
-	workloads, err := getAIRuntimeServiceWorkloadsWithContext(ctx, product, service, releaseName)
+	workloads, err := getAIRuntimeServiceWorkloads(ctx, product, service, releaseName)
 	if err != nil {
 		return fmt.Errorf("query service %s workloads failed: %w", item.ServiceName, err)
 	}
@@ -1822,11 +1817,7 @@ func resolveAIRuntimeServiceReleaseName(targetServiceName string, service *commo
 	return releaseName, nil
 }
 
-func getAIRuntimeServiceWorkloads(product *commonmodels.Product, service *commonmodels.ProductService, releaseName string) ([]*commonmodels.WorkLoad, error) {
-	return getAIRuntimeServiceWorkloadsWithContext(context.Background(), product, service, releaseName)
-}
-
-func getAIRuntimeServiceWorkloadsWithContext(ctx context.Context, product *commonmodels.Product, service *commonmodels.ProductService, releaseName string) ([]*commonmodels.WorkLoad, error) {
+func getAIRuntimeServiceWorkloads(ctx context.Context, product *commonmodels.Product, service *commonmodels.ProductService, releaseName string) ([]*commonmodels.WorkLoad, error) {
 	if product == nil || service == nil {
 		return nil, nil
 	}
@@ -1859,14 +1850,12 @@ func getAIRuntimeHelmServiceWorkloadsWithTimeout(ctx context.Context, product *c
 		workloads, err := parseAIRuntimeWorkloadsFromHelmManifest(manifest)
 		ch <- resp{workloads: workloads, err: err}
 	}()
-	timer := time.NewTimer(aiReleaseSpecialistKubeQueryTimeout)
-	defer timer.Stop()
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	case result := <-ch:
 		return result.workloads, result.err
-	case <-timer.C:
+	case <-time.After(aiReleaseSpecialistKubeQueryTimeout):
 		return nil, fmt.Errorf("query release %s workloads timeout after %s", releaseName, aiReleaseSpecialistKubeQueryTimeout)
 	}
 }
@@ -1943,14 +1932,12 @@ func listAIRuntimeWorkloadPodsWithTimeout(ctx context.Context, namespace string,
 		pods, err := listAIRuntimeWorkloadPods(namespace, workload, kubeClient)
 		ch <- resp{pods: pods, err: err}
 	}()
-	timer := time.NewTimer(aiReleaseSpecialistKubeQueryTimeout)
-	defer timer.Stop()
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	case result := <-ch:
 		return result.pods, result.err
-	case <-timer.C:
+	case <-time.After(aiReleaseSpecialistKubeQueryTimeout):
 		return nil, fmt.Errorf("query workload %s/%s pods timeout after %s", namespace, workload.WorkloadName, aiReleaseSpecialistKubeQueryTimeout)
 	}
 }
